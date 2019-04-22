@@ -1825,7 +1825,6 @@ static int __init thermal_init(void)
 		pr_warn("Thermal: Can not register suspend notifier, return %d\n",
 			result);
 
-
 	result = create_thermal_message_node();
 	if (result)
 		pr_warn("Thermal: create thermal message node failed, return %d\n",
