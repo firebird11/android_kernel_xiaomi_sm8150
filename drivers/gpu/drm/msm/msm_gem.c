@@ -1146,7 +1146,7 @@ static struct drm_gem_object *_msm_gem_new(struct drm_device *dev,
 
 	ret = msm_gem_new_impl(dev, size, flags, NULL, &obj, struct_mutex_locked);
 	if (ret)
-		goto fail;
+		return ERR_PTR(-EINVAL);
 
 	if (use_vram) {
 		struct msm_gem_vma *vma;
@@ -1159,7 +1159,7 @@ static struct drm_gem_object *_msm_gem_new(struct drm_device *dev,
 		mutex_unlock(&msm_obj->lock);
 		if (IS_ERR(vma)) {
 			ret = PTR_ERR(vma);
-			goto fail;
+		    return ERR_PTR(ret);
 		}
 
 		to_msm_bo(obj)->vram_node = &vma->node;
@@ -1169,14 +1169,14 @@ static struct drm_gem_object *_msm_gem_new(struct drm_device *dev,
 		pages = get_pages(obj);
 		if (IS_ERR(pages)) {
 			ret = PTR_ERR(pages);
-			goto fail;
+		    return ERR_PTR(ret);
 		}
 
 		vma->iova = physaddr(obj);
 	} else {
 		ret = drm_gem_object_init(dev, obj, size);
 		if (ret)
-			goto fail;
+		    return ERR_PTR(ret);
 	}
 
 	return obj;
@@ -1261,7 +1261,7 @@ struct drm_gem_object *msm_gem_import(struct drm_device *dev,
 	ret = msm_gem_new_impl(dev, size, MSM_BO_WC, dmabuf->resv, &obj,
 			false);
 	if (ret)
-		goto fail;
+		return ERR_PTR(-EINVAL);
 
 	drm_gem_private_object_init(dev, obj, size);
 
@@ -1295,10 +1295,6 @@ struct drm_gem_object *msm_gem_import(struct drm_device *dev,
 
 	mutex_unlock(&msm_obj->lock);
 	return obj;
-
-fail:
-	drm_gem_object_unreference_unlocked(obj);
-	return ERR_PTR(ret);
 }
 
 static void *_msm_gem_kernel_new(struct drm_device *dev, uint32_t size,
