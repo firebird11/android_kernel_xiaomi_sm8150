@@ -45,7 +45,6 @@
 #ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE
 #include "../xiaomi/xiaomi_touch.h"
 #endif
-#include "test_core/test_param_init.h"
 
 #ifdef CONFIG_TOUCHSCREEN_COMMON
 #include <linux/input/tp_common.h>
@@ -640,67 +639,6 @@ static ssize_t goodix_ts_irq_info_store(struct device *dev,
 	return count;
 }
 
-/* open short test */
-static ssize_t goodix_ts_tp_test_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	int ret = 0;
-	int r = 0;
-	ret = goodix_tools_register();
-
-	if (ret) {
-		ret = 0;
-		ts_err("tp_test prepare goodix_tools_register failed");
-		r = snprintf(buf, sizeof(ret), "%d", ret);
-		if (r < 0)
-			return -EINVAL;
-		return sizeof(ret);
-	}
-	ts_info("test start!");
-	ret = test_process(dev);
-
-	if (ret == 0) {
-		ret = 1;
-		ts_err("test PASS!");
-	} else {
-		ts_err("test FAILED. result:%x", ret);
-		ret = 0;
-	}
-	goodix_tools_unregister();
-	r = snprintf(buf, sizeof(ret), "%d\n", ret);
-	if (r < 0)
-		return -EINVAL;
-
-	ts_info("test finish!");
-	return sizeof(ret);
-
-}
-
-/* tp get rawdata */
-static ssize_t goodix_ts_tp_rawdata_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-
-{
-	int ret = 0;
-	int r = 0;
-	int buf_size = 0;
-	ret = goodix_tools_register();
-
-	if (ret) {
-		ret = 0;
-		ts_err("tp_rawdata prepare goodix_tools_register failed");
-		r = snprintf(buf, 6, "-EIO\t\n");
-		if (r < 0)
-			return -EINVAL;
-		return 4;/*sizeof("-EIO")*/
-	}
-	ts_info("start get rawdata!");
-	ret = get_tp_rawdata(dev, buf, &buf_size);
-	goodix_tools_unregister();
-	ts_info("test finish!");
-	return ret;
-}
-
 static ssize_t goodix_ts_power_reset_show(struct device *dev,
 		struct device_attribute *attr,
 		char *buf)
@@ -717,32 +655,6 @@ static ssize_t goodix_ts_power_reset_show(struct device *dev,
 	if (hw_ops->reset)
 		hw_ops->reset(core_data->ts_dev);
 
-	return ret;
-}
-
-/* tp get test config */
-static ssize_t goodix_ts_tp_get_testcfg_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-
-{
-	int ret = 0;
-	int r = 0;
-	int buf_size = 0;
-	ret = goodix_tools_register();
-
-	if (ret) {
-		ret = 0;
-		ts_err("tp_rawdata prepare goodix_tools_register failed");
-		r = snprintf(buf, 6, "-EIO\t\n");
-		if (r < 0)
-			return -EINVAL;
-		return 4;/*sizeof("-EIO")*/
-	}
-
-	ts_info("start get rawdata!");
-	ret = get_tp_testcfg(dev, buf, &buf_size);
-	goodix_tools_unregister();
-	ts_info("test finish!");
 	return ret;
 }
 
@@ -790,9 +702,6 @@ static DEVICE_ATTR(send_cfg, S_IWUSR | S_IWGRP, NULL, goodix_ts_send_cfg_store);
 static DEVICE_ATTR(read_cfg, S_IRUGO, goodix_ts_read_cfg_show, NULL);
 static DEVICE_ATTR(irq_info, S_IRUGO | S_IWUSR | S_IWGRP,
 		goodix_ts_irq_info_show, goodix_ts_irq_info_store);
-static DEVICE_ATTR(tp_test, S_IRUGO, goodix_ts_tp_test_show, NULL);
-static DEVICE_ATTR(tp_rawdata, S_IRUGO, goodix_ts_tp_rawdata_show, NULL);
-static DEVICE_ATTR(tp_get_testcfg, S_IRUGO, goodix_ts_tp_get_testcfg_show, NULL);
 static DEVICE_ATTR(tp_power_reset, S_IRUGO, goodix_ts_power_reset_show, NULL);
 
 static struct attribute *sysfs_attrs[] = {
@@ -804,9 +713,6 @@ static struct attribute *sysfs_attrs[] = {
 	&dev_attr_send_cfg.attr,
 	&dev_attr_read_cfg.attr,
 	&dev_attr_irq_info.attr,
-	&dev_attr_tp_test.attr,
-	&dev_attr_tp_rawdata.attr,
-	&dev_attr_tp_get_testcfg.attr,
 	&dev_attr_tp_power_reset.attr,
 	NULL,
 };
@@ -1271,41 +1177,6 @@ static ssize_t gtp_touch_suspend_notify_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%d\n", !!atomic_read(&goodix_core_data->suspend_stat));
 }
 
-static ssize_t gtp_fod_test_store(struct device *dev,
-				struct device_attribute *attr,
-				const char *buf, size_t count)
-{
-	int value = 0;
-	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
-
-	ts_info("buf:%c,count:%zu\n", buf[0], count);
-	sscanf(buf, "%u", &value);
-	if (value) {
-		input_report_key(core_data->input_dev, BTN_INFO, 1);
-		/*input_report_key(core_data->input_dev, KEY_INFO, 1);*/
-		input_sync(core_data->input_dev);
-		input_mt_slot(core_data->input_dev, 0);
-		input_mt_report_slot_state(core_data->input_dev, MT_TOOL_FINGER, 1);
-		input_report_key(core_data->input_dev, BTN_TOUCH, 1);
-		input_report_key(core_data->input_dev, BTN_TOOL_FINGER, 1);
-		input_report_abs(core_data->input_dev, ABS_MT_TRACKING_ID, 0);
-		input_report_abs(core_data->input_dev, ABS_MT_POSITION_X, CENTER_X);
-		input_report_abs(core_data->input_dev, ABS_MT_POSITION_Y, CENTER_Y);
-		input_report_abs(core_data->input_dev, ABS_MT_WIDTH_MINOR, 8);
-		input_report_abs(core_data->input_dev, ABS_MT_WIDTH_MAJOR, 8);
-		input_sync(core_data->input_dev);
-	} else {
-		input_mt_slot(core_data->input_dev, 0);
-		input_mt_report_slot_state(core_data->input_dev, MT_TOOL_FINGER, 0);
-		input_report_abs(core_data->input_dev, ABS_MT_TRACKING_ID, -1);
-		input_report_key(core_data->input_dev, BTN_INFO, 0);
-		/*input_report_key(core_data->input_dev, KEY_INFO, 0);*/
-		input_sync(core_data->input_dev);
-	}
-	return count;
-}
-
-
 static ssize_t gtp_fod_status_show(struct kobject *kobj,
 					struct kobj_attribute *attr, char *buf)
 {
@@ -1330,9 +1201,6 @@ static struct tp_common_ops fod_status_ops = {
 	.store = gtp_fod_status_store,
 };
 #endif
-
-static DEVICE_ATTR(fod_test, (S_IRUGO | S_IWUSR | S_IWGRP),
-		NULL, gtp_fod_test_store);
 
 static DEVICE_ATTR(touch_suspend_notify, (S_IRUGO | S_IRGRP),
 			gtp_touch_suspend_notify_show, NULL);
@@ -2255,20 +2123,10 @@ static int gtp_short_open_test(void)
 		ts_err("tp_test prepare goodix_tools_register failed");
 		return GTP_RESULT_INVALID;
 	}
-	ts_info("test start!");
-	ret = test_process((void *)(&goodix_core_data->pdev->dev));
 
-	if (ret == 0) {
-		ts_err("test PASS!");
-		return GTP_RESULT_PASS;
-	} else {
-		ts_err("test FAILED. result:%x", ret);
-		return GTP_RESULT_FAIL;
-	}
 	goodix_tools_unregister();
 
-	ts_info("test finish!");
-	return GTP_RESULT_FAIL;
+	return GTP_RESULT_PASS;
 }
 static ssize_t gtp_selftest_write(struct file *file, const char __user * buf,
 				size_t count, loff_t * pos)
@@ -2734,12 +2592,6 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	if (sysfs_create_file(&core_data->gtp_touch_dev->kobj,
 			&dev_attr_touch_suspend_notify.attr)) {
 		ts_err("Failed to create sysfs group!\n");
-		goto out;
-	}
-
-	if (sysfs_create_file(&core_data->gtp_touch_dev->kobj,
-				  &dev_attr_fod_test.attr)) {
-		ts_err("Failed to create fod_test sysfs group!");
 		goto out;
 	}
 
