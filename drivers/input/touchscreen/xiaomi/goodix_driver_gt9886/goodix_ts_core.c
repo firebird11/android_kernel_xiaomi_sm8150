@@ -790,6 +790,13 @@ static struct tp_common_ops double_tap_ops = {
 };
 #endif
 
+static ssize_t udfps_pressed_show(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
+	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
+	return scnprintf(buf, 10, "%i\n", core_data->udfps_pressed);
+}
+
 static DEVICE_ATTR(extmod_info, S_IRUGO, goodix_ts_extmod_show, NULL);
 static DEVICE_ATTR(driver_info, S_IRUGO, goodix_ts_driver_info_show, NULL);
 static DEVICE_ATTR(chip_info, S_IRUGO, goodix_ts_chip_info_show, NULL);
@@ -799,6 +806,7 @@ static DEVICE_ATTR(send_cfg, S_IWUSR | S_IWGRP, NULL, goodix_ts_send_cfg_store);
 static DEVICE_ATTR(read_cfg, S_IRUGO, goodix_ts_read_cfg_show, NULL);
 static DEVICE_ATTR(irq_info, S_IRUGO | S_IWUSR | S_IWGRP,
 		   goodix_ts_irq_info_show, goodix_ts_irq_info_store);
+static DEVICE_ATTR(udfps_pressed, 0660, udfps_pressed_show, NULL);
 #ifdef CONFIG_TOUCHSCREEN_GOODIX_GTX8_TEST
 static DEVICE_ATTR(tp_test, S_IRUGO, goodix_ts_tp_test_show, NULL);
 static DEVICE_ATTR(tp_rawdata, S_IRUGO, goodix_ts_tp_rawdata_show, NULL);
@@ -816,6 +824,7 @@ static struct attribute *sysfs_attrs[] = {
 	&dev_attr_send_cfg.attr,
 	&dev_attr_read_cfg.attr,
 	&dev_attr_irq_info.attr,
+	&dev_attr_udfps_pressed.attr,
 #ifdef CONFIG_TOUCHSCREEN_GOODIX_GTX8_TEST
 	&dev_attr_tp_test.attr,
 	&dev_attr_tp_rawdata.attr,
@@ -1980,6 +1989,7 @@ int goodix_ts_fb_notifier_callback(struct notifier_block *self,
 		} else if (event == MSM_DRM_EVENT_BLANK &&
 			   blank == MSM_DRM_BLANK_UNBLANK) {
 			//if (!atomic_read(&core_data->suspend_stat))
+			core_data->udfps_pressed = 0;
 			ts_info("core_data->suspend_stat = %d\n",
 				atomic_read(&core_data->suspend_stat));
 			ts_info("touchpanel resume");
