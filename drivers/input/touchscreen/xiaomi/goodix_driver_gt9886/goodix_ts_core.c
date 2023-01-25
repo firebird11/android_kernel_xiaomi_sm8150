@@ -804,6 +804,22 @@ static ssize_t double_tap_pressed_show(struct device *dev,
 	return scnprintf(buf, 10, "%i\n", core_data->double_tap_pressed);
 }
 
+static ssize_t double_tap_enabled_store(struct device *dev,
+				  struct device_attribute *attr, const char *buf,
+				  size_t count)
+{
+	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
+	core_data->double_tap_enabled = buf[0] != '0';
+	return count;
+}
+
+static ssize_t double_tap_enabled_show(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
+	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
+	return scnprintf(buf, 10, "%i\n", core_data->double_tap_enabled);
+}
+
 static DEVICE_ATTR(extmod_info, S_IRUGO, goodix_ts_extmod_show, NULL);
 static DEVICE_ATTR(driver_info, S_IRUGO, goodix_ts_driver_info_show, NULL);
 static DEVICE_ATTR(chip_info, S_IRUGO, goodix_ts_chip_info_show, NULL);
@@ -815,6 +831,7 @@ static DEVICE_ATTR(irq_info, S_IRUGO | S_IWUSR | S_IWGRP,
 		   goodix_ts_irq_info_show, goodix_ts_irq_info_store);
 static DEVICE_ATTR(udfps_pressed, 0660, udfps_pressed_show, NULL);
 static DEVICE_ATTR(double_tap_pressed, 0660, double_tap_pressed_show, NULL);
+static DEVICE_ATTR(double_tap_enabled, 0664, double_tap_enabled_show, double_tap_enabled_store);
 #ifdef CONFIG_TOUCHSCREEN_GOODIX_GTX8_TEST
 static DEVICE_ATTR(tp_test, S_IRUGO, goodix_ts_tp_test_show, NULL);
 static DEVICE_ATTR(tp_rawdata, S_IRUGO, goodix_ts_tp_rawdata_show, NULL);
@@ -834,6 +851,7 @@ static struct attribute *sysfs_attrs[] = {
 	&dev_attr_irq_info.attr,
 	&dev_attr_udfps_pressed.attr,
 	&dev_attr_double_tap_pressed.attr,
+	&dev_attr_double_tap_enabled.attr,
 #ifdef CONFIG_TOUCHSCREEN_GOODIX_GTX8_TEST
 	&dev_attr_tp_test.attr,
 	&dev_attr_tp_rawdata.attr,
