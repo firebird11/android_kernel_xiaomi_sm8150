@@ -1421,10 +1421,6 @@ static ssize_t gtp_fod_status_store(struct kobject *kobj,
 {
 	sscanf(buf, "%u", &goodix_core_data->fod_status);
 
-	goodix_core_data->gesture_enabled = goodix_core_data->double_wakeup |
-					    goodix_core_data->fod_status;
-	goodix_check_gesture_stat(!!goodix_core_data->fod_status);
-
 	return count;
 }
 
