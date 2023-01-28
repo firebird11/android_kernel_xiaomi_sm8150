@@ -740,7 +740,7 @@ static ssize_t goodix_ts_tp_get_testcfg_show(struct device *dev,
 static ssize_t double_tap_show(struct kobject *kobj,
 			       struct kobj_attribute *attr, char *buf)
 {
-	return sprintf(buf, "%d\n", goodix_core_data->double_wakeup);
+	return sprintf(buf, "%d\n", goodix_core_data->double_tap_enabled);
 }
 
 static ssize_t double_tap_store(struct kobject *kobj,
@@ -753,15 +753,15 @@ static ssize_t double_tap_store(struct kobject *kobj,
 	if (rc)
 		return -EINVAL;
 
-	goodix_core_data->double_wakeup = !!val;
+	goodix_core_data->double_tap_enabled = !!val;
 	if (goodix_core_data->fod_status == -1 ||
 	    goodix_core_data->fod_status == 100)
 		goodix_core_data->gesture_enabled =
-			goodix_core_data->double_wakeup |
+			goodix_core_data->double_tap_enabled |
 			goodix_core_data->aod_status;
 	else
 		goodix_core_data->gesture_enabled =
-			goodix_core_data->double_wakeup |
+			goodix_core_data->double_tap_enabled |
 			goodix_core_data->fod_status |
 			goodix_core_data->aod_status;
 
@@ -788,8 +788,7 @@ static ssize_t udfps_enabled_store(struct device *dev,
 	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
 	core_data->udfps_enabled = buf[0] != '0';
 
-	core_data->fod_status = core_data->udfps_enabled;
-	core_data->gesture_enabled = core_data->double_wakeup | core_data->fod_status;
+	core_data->gesture_enabled = core_data->double_tap_enabled | core_data->udfps_enabled;
 
 	goodix_check_gesture_stat(true);
 
@@ -817,8 +816,7 @@ static ssize_t double_tap_enabled_store(struct device *dev,
 	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
 	core_data->double_tap_enabled = buf[0] != '0';
 
-	core_data->double_wakeup = core_data->double_tap_enabled;
-	core_data->gesture_enabled = core_data->double_wakeup | core_data->fod_status;
+	core_data->gesture_enabled = core_data->double_tap_enabled | core_data->udfps_enabled;
 
 	goodix_check_gesture_stat(true);
 
@@ -1741,14 +1739,14 @@ int goodix_ts_suspend(struct goodix_ts_core *core_data)
 			r = ext_module->funcs->before_suspend(core_data,
 							      ext_module);
 			if (r == EVT_CANCEL_SUSPEND) {
-				if (core_data->double_wakeup &&
-				    core_data->fod_status) {
+				if (core_data->double_tap_enabled &&
+				    core_data->udfps_enabled) {
 					atomic_set(&core_data->suspend_stat,
 						   TP_GESTURE_DBCLK_FOD);
-				} else if (core_data->double_wakeup) {
+				} else if (core_data->double_tap_enabled) {
 					atomic_set(&core_data->suspend_stat,
 						   TP_GESTURE_DBCLK);
-				} else if (core_data->fod_status) {
+				} else if (core_data->udfps_enabled) {
 					atomic_set(&core_data->suspend_stat,
 						   TP_GESTURE_FOD);
 				}
@@ -2434,7 +2432,7 @@ static int gtp_set_cur_value(int gtp_mode, int gtp_value)
 	if (gtp_mode == Touch_Fod_Enable && goodix_core_data && gtp_value >= 0) {
 		ts_info("set fod status");
 		goodix_core_data->fod_status = gtp_value;
-		goodix_core_data->gesture_enabled = goodix_core_data->double_wakeup |
+		goodix_core_data->gesture_enabled = goodix_core_data->double_tap_enabled |
 			goodix_core_data->fod_status | goodix_core_data->aod_status;
 		goodix_check_gesture_stat(!!goodix_core_data->fod_status);
 		return 0;
@@ -2442,7 +2440,7 @@ static int gtp_set_cur_value(int gtp_mode, int gtp_value)
 	if (gtp_mode == Touch_Aod_Enable && goodix_core_data && gtp_value >= 0) {
 		ts_info("set aod status");
 		goodix_core_data->aod_status = gtp_value;
-		goodix_core_data->gesture_enabled = goodix_core_data->double_wakeup |
+		goodix_core_data->gesture_enabled = goodix_core_data->double_tap_enabled |
 			goodix_core_data->fod_status | goodix_core_data->aod_status;
 		goodix_check_gesture_stat(!!goodix_core_data->aod_status);
 		return 0;
