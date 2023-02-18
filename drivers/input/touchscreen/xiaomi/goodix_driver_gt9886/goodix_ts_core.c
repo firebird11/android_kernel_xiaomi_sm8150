@@ -778,7 +778,7 @@ static ssize_t udfps_pressed_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
 	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
-	return scnprintf(buf, 10, "%i\n", core_data->udfps_pressed);
+	return scnprintf(buf, PAGE_SIZE, "%i\n", core_data->udfps_pressed);
 }
 
 static ssize_t udfps_enabled_store(struct device *dev,
@@ -799,14 +799,14 @@ static ssize_t udfps_enabled_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
 	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
-	return scnprintf(buf, 10, "%i\n", core_data->udfps_enabled);
+	return scnprintf(buf, PAGE_SIZE, "%i\n", core_data->udfps_enabled);
 }
 
 static ssize_t double_tap_pressed_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
 	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
-	return scnprintf(buf, 10, "%i\n", core_data->double_tap_pressed);
+	return scnprintf(buf, PAGE_SIZE, "%i\n", core_data->double_tap_pressed);
 }
 
 static ssize_t double_tap_enabled_store(struct device *dev,
@@ -827,7 +827,7 @@ static ssize_t double_tap_enabled_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
 	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
-	return scnprintf(buf, 10, "%i\n", core_data->double_tap_enabled);
+	return scnprintf(buf, PAGE_SIZE, "%i\n", core_data->double_tap_enabled);
 }
 
 static DEVICE_ATTR(extmod_info, S_IRUGO, goodix_ts_extmod_show, NULL);
@@ -1394,7 +1394,7 @@ static ssize_t gtp_fod_test_store(struct device *dev,
 static ssize_t gtp_fod_status_show(struct kobject *kobj,
 				   struct kobj_attribute *attr, char *buf)
 {
-	return snprintf(buf, 10, "%d\n", goodix_core_data->fod_status);
+	return snprintf(buf, PAGE_SIZE, "%d\n", goodix_core_data->fod_status);
 }
 
 static ssize_t gtp_fod_status_store(struct kobject *kobj,
