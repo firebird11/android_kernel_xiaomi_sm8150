@@ -788,7 +788,7 @@ static ssize_t udfps_enabled_store(struct device *dev,
 	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
 	core_data->udfps_enabled = buf[0] != '0';
 
-	core_data->gesture_enabled = core_data->double_tap_enabled | core_data->udfps_enabled;
+	core_data->gesture_enabled = core_data->double_tap_enabled | core_data->udfps_enabled | core_data->single_tap_enabled;
 
 	goodix_check_gesture_stat(true);
 
@@ -816,7 +816,7 @@ static ssize_t double_tap_enabled_store(struct device *dev,
 	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
 	core_data->double_tap_enabled = buf[0] != '0';
 
-	core_data->gesture_enabled = core_data->double_tap_enabled | core_data->udfps_enabled;
+	core_data->gesture_enabled = core_data->double_tap_enabled | core_data->udfps_enabled | core_data->single_tap_enabled;
 
 	goodix_check_gesture_stat(true);
 
@@ -828,6 +828,37 @@ static ssize_t double_tap_enabled_show(struct device *dev,
 {
 	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
 	return scnprintf(buf, PAGE_SIZE, "%i\n", core_data->double_tap_enabled);
+}
+
+static ssize_t single_tap_pressed_show(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
+	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%i\n", core_data->single_tap_pressed);
+}
+
+static ssize_t single_tap_enabled_store(struct device *dev,
+				  struct device_attribute *attr, const char *buf,
+				  size_t count)
+{
+	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
+
+	core_data->single_tap_enabled = buf[0] != '0';
+
+	core_data->gesture_enabled = core_data->double_tap_enabled | core_data->udfps_enabled | core_data->single_tap_enabled;
+
+	goodix_check_gesture_stat(true);
+
+	return count;
+}
+
+static ssize_t single_tap_enabled_show(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
+	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%i\n", core_data->single_tap_enabled);
 }
 
 static DEVICE_ATTR(extmod_info, S_IRUGO, goodix_ts_extmod_show, NULL);
@@ -843,6 +874,8 @@ static DEVICE_ATTR(udfps_pressed, 0660, udfps_pressed_show, NULL);
 static DEVICE_ATTR(udfps_enabled, 0664, udfps_enabled_show, udfps_enabled_store);
 static DEVICE_ATTR(double_tap_pressed, 0660, double_tap_pressed_show, NULL);
 static DEVICE_ATTR(double_tap_enabled, 0664, double_tap_enabled_show, double_tap_enabled_store);
+static DEVICE_ATTR(single_tap_pressed, 0660, single_tap_pressed_show, NULL);
+static DEVICE_ATTR(single_tap_enabled, 0664, single_tap_enabled_show, single_tap_enabled_store);
 #ifdef CONFIG_TOUCHSCREEN_GOODIX_GTX8_TEST
 static DEVICE_ATTR(tp_test, S_IRUGO, goodix_ts_tp_test_show, NULL);
 static DEVICE_ATTR(tp_rawdata, S_IRUGO, goodix_ts_tp_rawdata_show, NULL);
@@ -864,6 +897,8 @@ static struct attribute *sysfs_attrs[] = {
 	&dev_attr_udfps_enabled.attr,
 	&dev_attr_double_tap_pressed.attr,
 	&dev_attr_double_tap_enabled.attr,
+	&dev_attr_single_tap_pressed.attr,
+	&dev_attr_single_tap_enabled.attr,
 #ifdef CONFIG_TOUCHSCREEN_GOODIX_GTX8_TEST
 	&dev_attr_tp_test.attr,
 	&dev_attr_tp_rawdata.attr,
@@ -1740,13 +1775,13 @@ int goodix_ts_suspend(struct goodix_ts_core *core_data)
 							      ext_module);
 			if (r == EVT_CANCEL_SUSPEND) {
 				if (core_data->double_tap_enabled &&
-				    core_data->udfps_enabled) {
+				    (core_data->udfps_enabled || core_data->single_tap_enabled)) {
 					atomic_set(&core_data->suspend_stat,
 						   TP_GESTURE_DBCLK_FOD);
 				} else if (core_data->double_tap_enabled) {
 					atomic_set(&core_data->suspend_stat,
 						   TP_GESTURE_DBCLK);
-				} else if (core_data->udfps_enabled) {
+				} else if (core_data->udfps_enabled || core_data->single_tap_enabled)) {
 					atomic_set(&core_data->suspend_stat,
 						   TP_GESTURE_FOD);
 				}
@@ -1974,6 +2009,7 @@ resume:
 		return 0;
 	core_data->udfps_pressed = 0;
 	core_data->double_tap_pressed = 0;
+	core_data->single_tap_pressed = 0;
 	ts_info("touchpanel resume");
 	queue_work(core_data->event_wq, &core_data->resume_work);
 	return 0;
