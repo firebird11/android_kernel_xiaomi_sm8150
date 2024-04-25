@@ -6138,7 +6138,7 @@ static int smblib_handle_usb_current(struct smb_charger *chg,
 					rp_ua = FLOAT_CHARGER_UA;
 #endif
 				rc = vote(chg->usb_icl_votable,
-#if defined(CONFIG_MACH_XIAOMI_SM8150) && !(defined(CONFIG_MACH_XIAOMI_VAYU) || defined(CONFIG_MACH_XIAOMI_NABU))
+#if defined(CONFIG_MACH_XIAOMI_VAYU) || defined(CONFIG_MACH_XIAOMI_NABU)
 						SW_ICL_MAX_VOTER, true, FLOAT_CHARGER_UA);
 #else
 						SW_ICL_MAX_VOTER, true, rp_ua);
