@@ -19,45 +19,19 @@
 #include <dsp/q6common.h>
 #include <dsp/q6core.h>
 #include <dsp/msm-audio-event-notify.h>
-#ifdef CONFIG_MACH_XIAOMI_SM8150
 #include <dsp/apr_elliptic.h>
-#endif
-/* for mius start */
 #ifdef CONFIG_US_PROXIMITY
 #include <dsp/apr_mius.h>
 #endif
-/* for mius end */
 #include <ipc/apr_tal.h>
 #include "adsp_err.h"
 #include "q6afecal-hwdep.h"
-
 #ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 #include "../asoc/codecs/tfa98xx/inc/tfa_platform_interface_definition.h"
 #endif
 
 #ifdef CONFIG_MSM_CSPL
 #include <dsp/msm-cirrus-playback.h>
-#endif
-
-#ifdef CONFIG_MSM_CSPL_V2
-#include <dsp/msm-cirrus-playback-v2.h>
-#endif
-
-#ifdef CONFIG_TAS25XX_ALGO
-#include <dsp/tas_smart_amp_v2.h>
-#ifdef INSTANCE_ID_0 /*APR Version 3*/
-static int32_t tas_smartamp_algo_callback(uint32_t opcode, uint32_t *payload,
-				    uint32_t payload_size);
-#else /*APR Version 2*/
-static int32_t tas_smartamp_algo_callback(uint32_t *payload,
-				    uint32_t payload_size);
-#endif /*INSTANCE_ID_0*/
-#endif /*CONFIG_TAS25XX_ALGO*/
-
-#ifdef AUDIO_FORCE_RESTART_ADSP
-#include <soc/qcom/subsystem_restart.h>
-#define ADSP_ERR_LIMITED_COUNT   (3)
-static int err_count = 0;
 #endif
 
 #define WAKELOCK_TIMEOUT	5000
@@ -183,20 +157,17 @@ struct afe_ctl {
 	int set_custom_topology;
 	int dev_acdb_id[AFE_MAX_PORTS];
 	routing_cb rt_cb;
-#ifdef CONFIG_TAS25XX_ALGO
-	struct afe_smartamp_calib_get_resp tas_calib_data;
-#endif	/*CONFIG_TAS25XX_ALGO*/
 	struct audio_uevent_data *uevent_data;
 	/* cal info for AFE */
 	struct afe_fw_info *fw_data;
 	u32 island_mode[AFE_MAX_PORTS];
 	struct vad_config vad_cfg[AFE_MAX_PORTS];
 	struct work_struct afe_dc_work;
-	struct notifier_block event_notifier;
 #ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 	struct rtac_cal_block_data tfa_cal;
 	atomic_t tfa_state;
 #endif /*CONFIG_SND_SOC_TFA9874_FOR_DAVI*/
+	struct notifier_block event_notifier;
 	/* FTM spk params */
 	uint32_t initial_cal;
 	uint32_t v_vali_flag;
@@ -337,10 +308,8 @@ static void av_dev_drift_afe_cb_handler(uint32_t opcode, uint32_t *payload,
 					uint32_t payload_size)
 {
 	u32 param_id;
-#if !defined(CONFIG_MACH_XIAOMI_SM8150) || defined(CONFIG_MACH_XIAOMI_VAYU) || defined(CONFIG_MACH_XIAOMI_NABU)
 	size_t expected_size =
 		sizeof(u32) + sizeof(struct afe_param_id_dev_timing_stats);
-#endif
 
 	/* Get param ID depending on command type */
 	param_id = (opcode == AFE_PORT_CMDRSP_GET_PARAM_V3) ? payload[3] :
@@ -352,14 +321,12 @@ static void av_dev_drift_afe_cb_handler(uint32_t opcode, uint32_t *payload,
 
 	switch (opcode) {
 	case AFE_PORT_CMDRSP_GET_PARAM_V2:
-#if !defined(CONFIG_MACH_XIAOMI_SM8150) || defined(CONFIG_MACH_XIAOMI_VAYU) || defined(CONFIG_MACH_XIAOMI_NABU)
 		expected_size += sizeof(struct param_hdr_v1);
 		if (payload_size < expected_size) {
 			pr_err("%s: Error: received size %d, expected size %zu\n",
 			       __func__, payload_size, expected_size);
 			return;
 		}
-#endif
 		/* Repack response to add IID */
 		this_afe.av_dev_drift_resp.status = payload[0];
 		this_afe.av_dev_drift_resp.pdata.module_id = payload[1];
@@ -370,14 +337,12 @@ static void av_dev_drift_afe_cb_handler(uint32_t opcode, uint32_t *payload,
 		       sizeof(struct afe_param_id_dev_timing_stats));
 		break;
 	case AFE_PORT_CMDRSP_GET_PARAM_V3:
-#if !defined(CONFIG_MACH_XIAOMI_SM8150) || defined(CONFIG_MACH_XIAOMI_VAYU) || defined(CONFIG_MACH_XIAOMI_NABU)
 		expected_size += sizeof(struct param_hdr_v3);
 		if (payload_size < expected_size) {
 			pr_err("%s: Error: received size %d, expected size %zu\n",
 			       __func__, payload_size, expected_size);
 			return;
 		}
-#endif
 		memcpy(&this_afe.av_dev_drift_resp, payload,
 				sizeof(this_afe.av_dev_drift_resp));
 		break;
@@ -408,13 +373,6 @@ static int32_t sp_make_afe_callback(uint32_t opcode, uint32_t *payload,
 	/* Set command specific details */
 	switch (opcode) {
 	case AFE_PORT_CMDRSP_GET_PARAM_V2:
-#if !(defined(CONFIG_MACH_XIAOMI_VAYU) || defined(CONFIG_MACH_XIAOMI_NABU))
-		if (payload_size < (5 * sizeof(uint32_t))) {
-			pr_err("%s: Error: size %d is less than expected\n",
-				__func__, payload_size);
-			return -EINVAL;
-		}
-#endif
 		expected_size += sizeof(struct param_hdr_v1);
 		param_hdr.module_id = payload[1];
 		param_hdr.instance_id = INSTANCE_ID_0;
@@ -423,13 +381,6 @@ static int32_t sp_make_afe_callback(uint32_t opcode, uint32_t *payload,
 		data_start = &payload[4];
 		break;
 	case AFE_PORT_CMDRSP_GET_PARAM_V3:
-#if !defined(CONFIG_MACH_XIAOMI_SM8150) || (defined(CONFIG_MACH_XIAOMI_VAYU) || defined(CONFIG_MACH_XIAOMI_NABU))
-		if (payload_size < (6 * sizeof(uint32_t))) {
-			pr_err("%s: Error: size %d is less than expected\n",
-				__func__, payload_size);
-			return -EINVAL;
-		}
-#endif
 		expected_size += sizeof(struct param_hdr_v3);
 		if (payload_size < expected_size) {
 			pr_err("%s: Error: size %d is less than expected\n",
@@ -649,24 +600,11 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 	    data->opcode == AFE_PORT_CMDRSP_GET_PARAM_V3) {
 		uint32_t *payload = data->payload;
 		uint32_t param_id;
-#ifndef CONFIG_MACH_XIAOMI_SM8150
-		uint32_t param_id_pos = 0;
-#endif
 
 #ifdef CONFIG_MSM_CSPL
-		if (crus_afe_callback(data->payload, data->payload_size) == 0) {
+		if (crus_afe_callback(data->payload, data->payload_size) == 0)
 			return 0;
-		}
 #endif
-
-#ifdef CONFIG_MSM_CSPL_V2
-		if (crus_afe_callback(data->opcode, data->payload, data->payload_size) == 0){
-			if (afe_token_is_valid(data->token))
-				wake_up(&this_afe.wait[data->token]);
-			return 0;
-		}
-#endif
-
 		if (!payload || (data->token >= AFE_MAX_PORTS)) {
 			pr_err("%s: Error: size %d payload %pK token %d\n",
 				__func__, data->payload_size,
@@ -678,29 +616,15 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 					   data->payload_size))
 			return 0;
 
-#ifdef CONFIG_MACH_XIAOMI_SM8150
 		param_id = (data->opcode == AFE_PORT_CMDRSP_GET_PARAM_V3) ?
 					payload[3] :
 					payload[2];
-#else
-		if (data->opcode == AFE_PORT_CMDRSP_GET_PARAM_V3)
-			param_id_pos = 4;
-		else
-			param_id_pos = 3;
-
-		if (data->payload_size >= param_id_pos * sizeof(uint32_t))
-				param_id = payload[param_id_pos - 1];
-		else {
-			pr_err("%s: Error: size %d is less than expected\n",
-				__func__, data->payload_size);
-			return -EINVAL;
-		}
-#endif
 
 		if (param_id == AFE_PARAM_ID_DEV_TIMING_STATS) {
 			av_dev_drift_afe_cb_handler(data->opcode, data->payload,
 						    data->payload_size);
 		} else {
+
 #ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 			if (atomic_read(&this_afe.tfa_state) == 1 &&
 				data->payload_size == sizeof(uint32_t)) {
@@ -717,47 +641,15 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 				return 0;
 			}
 #endif /*CONFIG_SND_SOC_TFA9874_FOR_DAVI*/
-#ifdef CONFIG_TAS25XX_ALGO
-			{
-	                u32 *payload32 = data->payload;
-	                pr_info ("TI-SmartPA: payload1 = 0x%x, 0x%x", payload32[0], payload32[1]);
 
-					if((payload32[1] == AFE_SMARTAMP_MODULE_RX) ||
-					   (payload32[1] == AFE_SMARTAMP_MODULE_TX))
-					{
-#ifdef INSTANCE_ID_0 /*APR Version 3*/
-					if (tas_smartamp_algo_callback(data->opcode, data->payload, data->payload_size))
-						return -EINVAL;
-#else /*APR Version 2*/
-					if (tas_smartamp_algo_callback(data->payload, data->payload_size))
-						return -EINVAL;
-#endif /* INSTANCE_ID_0 */
-					} else if (sp_make_afe_callback(data->opcode,data->payload, data->payload_size)) {
-						return -EINVAL;
-					}
-	        }
-#else
 			if (sp_make_afe_callback(data->opcode, data->payload,
 						 data->payload_size))
 				return -EINVAL;
-#endif
 		}
 		if (afe_token_is_valid(data->token))
 			wake_up(&this_afe.wait[data->token]);
 		else
 			return -EINVAL;
-/* for mius start */
-#ifdef CONFIG_US_PROXIMITY
-	} else if (data->opcode == MI_ULTRASOUND_OPCODE) {
-		if (NULL != data->payload)
-		{
-			printk(KERN_DEBUG "[MIUS] mi ultrasound afe afe cb");
-			mius_process_apr_payload(data->payload);
-		}
-		else
-			pr_err("[EXPORT_SYMBOLLUS]: payload ptr is Invalid");
-#endif
-/* for mius end */
 	} else if (data->opcode == AFE_EVENT_MBHC_DETECTION_SW_WA) {
 		msm_aud_evt_notifier_call_chain(SWR_WAKE_IRQ_EVENT, NULL);
 	} else if (data->opcode ==
@@ -770,13 +662,11 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 		atomic_set(&this_afe.state, 0);
 		atomic_set(&this_afe.status, 0);
 		wake_up(&this_afe.lpass_core_hw_wait);
-#ifdef CONFIG_MACH_XIAOMI_SM8150
 	} else if (data->opcode == ULTRASOUND_OPCODE) {
 		if (NULL != data->payload)
 			elliptic_process_apr_payload(data->payload);
 		else
 			pr_err("[EXPORT_SYMBOLLUS]: payload ptr is Invalid");
-#endif
 	/* for mius start */
 #ifdef CONFIG_US_PROXIMITY
 	} else if (data->opcode == MI_ULTRASOUND_OPCODE) {
@@ -795,13 +685,6 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 
 		payload = data->payload;
 		if (data->opcode == APR_BASIC_RSP_RESULT) {
-#ifndef CONFIG_MACH_XIAOMI_SM8150
-			if (data->payload_size < (2 * sizeof(uint32_t))) {
-				pr_err("%s: Error: size %d is less than expected\n",
-					__func__, data->payload_size);
-				return -EINVAL;
-			}
-#endif
 			pr_debug("%s:opcode = 0x%x cmd = 0x%x status = 0x%x token=%d\n",
 				__func__, data->opcode,
 				payload[0], payload[1], data->token);
@@ -1177,26 +1060,11 @@ static int afe_apr_send_pkt(void *data, wait_queue_head_t *wait)
 					&this_afe.status)));
 				ret = adsp_err_get_lnx_err_code(
 						atomic_read(&this_afe.status));
-#ifdef AUDIO_FORCE_RESTART_ADSP
-				if (atomic_read(&this_afe.status) == ADSP_ENEEDMORE)
-					err_count++;
-				else
-					err_count = 0;
-
-				if (err_count >= ADSP_ERR_LIMITED_COUNT) {
-					err_count = 0;
-					pr_err("%s: DSP returned error more than limited, restart now !\n", __func__);
-					subsystem_restart("adsp");
-				}
-#endif
 			} else {
 				ret = 0;
 			}
 		} else {
 			ret = 0;
-#ifdef AUDIO_FORCE_RESTART_ADSP
-			err_count = 0;
-#endif
 		}
 	} else if (ret == 0) {
 		pr_err("%s: packet not transmitted\n", __func__);
@@ -1961,7 +1829,6 @@ fail_idx:
 	return ret;
 }
 
-#ifdef CONFIG_MACH_XIAOMI_SM8150
 afe_ultrasound_state_t elus_afe = {
 	.ptr_apr= &this_afe.apr,
 	.ptr_status= &this_afe.status,
@@ -1970,7 +1837,6 @@ afe_ultrasound_state_t elus_afe = {
 	.timeout_ms= TIMEOUT_MS,
 };
 EXPORT_SYMBOL(elus_afe);
-#endif
 
 /* for mius start */
 #ifdef CONFIG_US_PROXIMITY
@@ -2180,110 +2046,6 @@ static void afe_send_cal_spkr_prot_rx(int port_id)
 done:
 	return;
 }
-
-#ifdef CONFIG_MSM_CSPL_V2
-static int crus_cb_buffer[CRUS_BUF_SIZE];
-int crus_afe_callback(uint32_t opcode, void* payload, int size)
-{
-    uint32_t* payload32 = payload;
-
-    pr_debug("%s: module=0x%x size = %d\n", __func__,
-            (int)payload32[1], size);
-
-    if (payload32[1]!= CIRRUS_SP)
-        return -EINVAL;
-
-    if (size > CRUS_BUF_SIZE*sizeof(int)) {
-        pr_err("%s: module=0x%x, size(%d) > buf(%d), error!\n",
-                __func__,(int)payload32[1], size,
-                CRUS_BUF_SIZE*sizeof(int));
-        return -EINVAL;
-    }
-
-    memset(crus_cb_buffer, 0, CRUS_BUF_SIZE*sizeof(int));
-    if(opcode==AFE_PORT_CMDRSP_GET_PARAM_V2) {
-        memcpy(crus_cb_buffer, &payload32[4], size);
-    } else if(opcode==AFE_PORT_CMDRSP_GET_PARAM_V3) {
-        memcpy(crus_cb_buffer, &payload32[5], size);
-    } else {
-        pr_info("%s:opcode %d no surport!\n",__func__, opcode);
-        memcpy(crus_cb_buffer, &payload32[5], size);
-    }
-
-    atomic_set(&this_afe.state, 0);
-
-    return 0;
-}
-
-int crus_afe_get_params(u16 port_id, uint32_t module, uint32_t param_id,
-         void* data, int size) {
-    struct param_hdr_v3 param_hdr;
-    int ret = -EINVAL;
-
-	//mutex_lock(&this_afe.afe_cmd_lock);
-    pr_info("%s: enter ++, size=%d; module = 0x%08x, port = 0x%04x, param = 0x%08x\n",
-            __func__, size, module, port_id, param_id);
-
-    memset(&param_hdr, 0, sizeof(param_hdr));
-
-    param_hdr.module_id = module;
-    param_hdr.instance_id = INSTANCE_ID_0;
-    param_hdr.param_id = param_id;
-    param_hdr.param_size = size;
-
-    ret = q6afe_get_params(port_id, NULL, &param_hdr);
-    if (ret) {
-        pr_err("%s: Failed to get CSPL data\n", __func__);
-        goto done;
-    }
-
-    memcpy((u8 *)data, crus_cb_buffer, size);
-    ret = 0;
-done:
-	//mutex_unlock(&this_afe.afe_cmd_lock);
-    pr_info("%s: exit --\n", __func__);
-    return ret;
-}
-EXPORT_SYMBOL(crus_afe_get_params);
-int crus_afe_set_params(u16 port_id, uint32_t module_id, uint32_t param_id,
-        void* data, int size)
-{
-    int ret = 0;
-    struct param_hdr_v3 param_hdr;
-
-
-	//mutex_lock(&this_afe.afe_cmd_lock);
-    pr_info("%s: enter ++; module = 0x%08x, port = 0x%04x, param = 0x%08x\n",
-            __func__, module_id, port_id, param_id);
-
-    memset(&param_hdr, 0, sizeof(param_hdr));
-
-    /*  Set stream index */
-    param_hdr.module_id = module_id;
-    param_hdr.instance_id = INSTANCE_ID_0;
-    param_hdr.param_id = param_id;
-    param_hdr.param_size = size;
-
-    ret = q6afe_pack_and_set_param_in_band(port_id,
-            q6audio_get_port_index(port_id),
-            param_hdr, (u8 *) data);
-    if (ret) {
-        pr_err("%s: Failed to set cmd duration param, err %d\n",
-                __func__, ret);
-        goto fail_cmd;
-    }
-
-	//mutex_unlock(&this_afe.afe_cmd_lock);
-    ret = 0;
-fail_cmd:
-    pr_debug("%s: param_id =  0x%x ret = %d\n", __func__,
-            param_id, ret);
-    pr_info("%s: exit --\n", __func__);
-    return ret;
-
-}
-EXPORT_SYMBOL(crus_afe_set_params);
-#endif
 
 static int afe_send_hw_delay(u16 port_id, u32 rate)
 {
@@ -4732,14 +4494,11 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		goto fail_cmd;
 	}
 	ret = afe_send_cmd_port_start(port_id);
-
 #ifdef CONFIG_MSM_CSPL
 	if (ret == 0)
 		crus_afe_port_start(port_id);
-#elif defined(CONFIG_MSM_CSPL_V2)
-	if (ret == 0)
-		crus_qdsp_port_start(port_id, -1);
 #endif
+
 
 fail_cmd:
 	mutex_unlock(&this_afe.afe_cmd_lock);
@@ -7832,8 +7591,6 @@ int afe_close(int port_id)
 
 #ifdef CONFIG_MSM_CSPL
     crus_afe_port_close(port_id);
-#elif defined(CONFIG_MSM_CSPL_V2)
-    crus_qdsp_port_close(port_id, -1);
 #endif
 
 fail_cmd:
@@ -9275,6 +9032,7 @@ static void afe_release_uevent_data(struct kobject *kobj)
 }
 
 #ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
+
 int send_tfa_cal_apr(void *buf, int cmd_size, bool bRead)
 {
 	int32_t result, port_id = AFE_PORT_ID_TFADSP_RX;
@@ -9475,6 +9233,7 @@ int send_tfa_cal_set_tx_enable(void *buf, int cmd_size)
 	return 0;
 }
 EXPORT_SYMBOL(send_tfa_cal_set_tx_enable);
+
 #endif /*CONFIG_SND_SOC_TFA9874_FOR_DAVI*/
 
 int __init afe_init(void)
